@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analizador de Tareas - Excel</title>
+    
+    <!-- Carga de Tailwind CSS para los estilos -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Carga de SheetJS para leer archivos Excel en el navegador -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Pequeñas animaciones personalizadas -->
+    <style>
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+            animation: fadeInUp 0.4s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
+
+    <div class="max-w-4xl mx-auto space-y-6">
+        
+        <!-- Header -->
+        <header class="bg-white shadow-sm rounded-2xl p-6 border border-slate-100">
+            <div class="flex items-center space-x-3">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                    <polyline points="14 2 14 8 20 8"></polyline>
+                    <line x1="16" y1="13" x2="8" y2="13"></line>
+                    <line x1="16" y1="17" x2="8" y2="17"></line>
+                    <polyline points="10 9 9 9 8 9"></polyline>
+                </svg>
+                <div>
+                    <h1 class="text-2xl font-bold text-slate-900">Analizador de Tareas - Procesos Excel</h1>
+                    <p class="text-sm text-slate-500">Analiza el estado de las tareas por establecimiento y área de trabajo.</p>
+                </div>
+            </div>
+        </header>
+
+        <!-- Zona de Carga de Archivos -->
+        <div id="dropzone-container">
+            <div id="dropzone" class="border-2 border-slate-300 border-dashed rounded-2xl p-12 transition-all duration-200 text-center bg-white hover:border-slate-400 cursor-pointer">
+                <input type="file" id="file-input" class="hidden" accept=".xlsx, .xls, .csv">
+                
+                <div class="flex flex-col items-center justify-center space-y-4 pointer-events-none">
+                    <div id="dropzone-icon-bg" class="p-4 rounded-full bg-slate-100 text-slate-500 transition-colors">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-lg font-medium" id="dropzone-text">Haz clic para subir un Excel o arrástralo aquí</p>
+                        <p class="text-sm text-slate-500 mt-2 max-w-md mx-auto">
+                            El Excel debe tener 2 pestañas:<br/> 
+                            <strong>1ª:</strong> Procesos No Finalizados | <strong>2ª:</strong> Procesos Finalizados.<br/>
+                            La columna <strong>C</strong> debe contener el nombre del proceso.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Mensaje de Error (Oculto por defecto) -->
+        <div id="error-container" class="hidden bg-red-50 border-l-4 border-red-500 p-4 rounded-md items-start">
+            <svg class="h-5 w-5 text-red-500 mr-2 mt-0.5 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+            </svg>
+            <p id="error-text" class="text-sm text-red-700"></p>
+        </div>
+
+        <!-- Resultados (Oculto por defecto) -->
+        <div id="results-container" class="hidden space-y-6 animate-fade-in-up">
+            <div class="flex justify-between items-center">
+                <div>
+                    <span class="text-sm text-slate-500">Archivo analizado:</span>
+                    <p id="file-name" class="font-semibold text-slate-900"></p>
+                </div>
+                <!-- Botones de Acción -->
+                <div class="flex space-x-3">
+                    <button id="download-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition-colors text-sm flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Descargar HTML
+                    </button>
+                    <button id="reset-btn" class="bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-medium py-2 px-4 rounded-lg shadow-sm transition-colors text-sm">
+                        Analizar otro archivo
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-600 text-sm border-b border-slate-200">
+                                <th class="px-6 py-4 font-semibold w-1/4">Área de Trabajo</th>
+                                <th class="px-6 py-4 font-semibold text-center">Tareas Realizadas</th>
+                                <th class="px-6 py-4 font-semibold text-center">Tareas No Realizadas</th>
+                                <th class="px-6 py-4 font-semibold text-center">Total Tareas</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body" class="text-sm">
+                            <!-- El contenido se inyectará mediante JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // Función para generar la estructura de datos limpia en cada análisis
+        function getInitialResults() {
+            return {
+                "PECORA NERA RIVAS": {
+                    "PIZZERIA": { realizadas: 0, noRealizadas: 0 },
+                    "SALA": { realizadas: 0, noRealizadas: 0 },
+                    "OFFICE": { realizadas: 0, noRealizadas: 0 },
+                },
+                "PECORA NERA CAÑAVERAL": {
+                    "PIZZERIA": { realizadas: 0, noRealizadas: 0 },
+                    "SALA": { realizadas: 0, noRealizadas: 0 },
+                    "OFFICE": { realizadas: 0, noRealizadas: 0 },
+                },
+                "RAGU": {
+                    "COCINA": { realizadas: 0, noRealizadas: 0 },
+                    "SALA": { realizadas: 0, noRealizadas: 0 },
+                    "OFFICE": { realizadas: 0, noRealizadas: 0 },
+                }
+            };
+        }
+
+        // Elementos del DOM
+        const dropzoneContainer = document.getElementById('dropzone-container');
+        const dropzone = document.getElementById('dropzone');
+        const dropzoneIconBg = document.getElementById('dropzone-icon-bg');
+        const fileInput = document.getElementById('file-input');
+        const errorContainer = document.getElementById('error-container');
+        const errorText = document.getElementById('error-text');
+        const resultsContainer = document.getElementById('results-container');
+        const fileNameDisplay = document.getElementById('file-name');
+        const tableBody = document.getElementById('table-body');
+        const resetBtn = document.getElementById('reset-btn');
+        const downloadBtn = document.getElementById('download-btn');
+
+        function identifyTask(proceso) {
+            if (!proceso || typeof proceso !== 'string') return null;
+            const proc = proceso.toUpperCase().trim();
+
+            // PECORA NERA RIVAS
+            if (proc.startsWith("PIZZERIA PECORA RIVAS")) return { est: "PECORA NERA RIVAS", area: "PIZZERIA" };
+            if (proc.startsWith("SALA PECORA RIVAS")) return { est: "PECORA NERA RIVAS", area: "SALA" };
+            if (proc.startsWith("OFFICE PECORA RIVAS")) return { est: "PECORA NERA RIVAS", area: "OFFICE" };
+
+            // PECORA NERA CAÑAVERAL
+            if (proc.startsWith("PIZZERIA PECORA CAÑAVERAL")) return { est: "PECORA NERA CAÑAVERAL", area: "PIZZERIA" };
+            if (proc.startsWith("SALA PECORA CAÑAVERAL")) return { est: "PECORA NERA CAÑAVERAL", area: "SALA" };
+            if (proc.startsWith("OFFICE PECORA CAÑAVERAL")) return { est: "PECORA NERA CAÑAVERAL", area: "OFFICE" };
+
+            // RAGU
+            if (proc.startsWith("COCINA RAGU")) return { est: "RAGU", area: "COCINA" };
+            if (proc.startsWith("SALA RAGU")) return { est: "RAGU", area: "SALA" };
+            if (proc.startsWith("OFFICE RAGU")) return { est: "RAGU", area: "OFFICE" };
+
+            return null;
+        }
+
+        function showError(msg) {
+            errorText.textContent = msg;
+            errorContainer.classList.remove('hidden');
+            errorContainer.classList.add('flex');
+        }
+
+        function hideError() {
+            errorContainer.classList.add('hidden');
+            errorContainer.classList.remove('flex');
+        }
+
+        function processFile(file) {
+            if (!file) return;
+            
+            // Si SheetJS no se ha cargado correctamente
+            if (typeof XLSX === 'undefined') {
+                showError("La librería para leer Excel no ha cargado. Verifica tu conexión a internet.");
+                return;
+            }
+
+            hideError();
+            fileNameDisplay.textContent = file.name;
+
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
+
+                    if (wb.SheetNames.length < 2) {
+                        showError("El archivo Excel debe contener al menos 2 pestañas.");
+                        return;
+                    }
+
+                    // Pestaña 1 (Índice 0) -> No Finalizados, Pestaña 2 (Índice 1) -> Finalizados
+                    const sheetNoFinalizados = wb.SheetNames[0];
+                    const sheetFinalizados = wb.SheetNames[1];
+
+                    const results = getInitialResults();
+
+                    function analyzeSheet(sheetName, isFinalizado) {
+                        const ws = wb.Sheets[sheetName];
+                        // header: 1 devuelve array de arrays
+                        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+                        // Empezamos en i = 1 para saltar la fila de cabeceras
+                        for (let i = 1; i < rows.length; i++) {
+                            const row = rows[i];
+                            if (!row || row.length === 0) continue;
+
+                            const proceso = row[2]; // Columna C es el índice 2
+
+                            const taskInfo = identifyTask(proceso);
+                            if (taskInfo) {
+                                if (isFinalizado) {
+                                    results[taskInfo.est][taskInfo.area].realizadas += 1;
+                                } else {
+                                    results[taskInfo.est][taskInfo.area].noRealizadas += 1;
+                                }
+                            }
+                        }
+                    }
+
+                    // Ejecutar análisis en ambas pestañas
+                    analyzeSheet(sheetNoFinalizados, false);
+                    analyzeSheet(sheetFinalizados, true);
+
+                    // Renderizar en la interfaz
+                    renderResults(results);
+
+                } catch (err) {
+                    console.error(err);
+                    showError("Hubo un error al procesar el archivo. Asegúrate de que sea un Excel válido (.xlsx, .xls).");
+                }
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        function renderResults(results) {
+            let htmlContent = '';
+
+            for (const [est, areas] of Object.entries(results)) {
+                // Cabecera del Establecimiento
+                htmlContent += `
+                    <tr class="bg-slate-100 border-b border-slate-200">
+                        <td colspan="4" class="px-6 py-3 font-bold text-slate-800 tracking-wide uppercase text-xs">
+                            Establecimiento: <span class="text-blue-700">${est}</span>
+                        </td>
+                    </tr>
+                `;
+
+                // Filas por cada Área
+                for (const [area, counts] of Object.entries(areas)) {
+                    const total = counts.realizadas + counts.noRealizadas;
+                    const classNoRealizadas = counts.noRealizadas > 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500';
+
+                    htmlContent += `
+                        <tr class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                            <td class="px-6 py-3 font-medium text-slate-700 pl-10 flex items-center">
+                                <div class="w-2 h-2 rounded-full bg-slate-300 mr-3"></div>
+                                ${area}
+                            </td>
+                            <td class="px-6 py-3 text-center">
+                                <span class="inline-flex items-center justify-center bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full min-w-[3rem]">
+                                    ${counts.realizadas}
+                                </span>
+                            </td>
+                            <td class="px-6 py-3 text-center">
+                                <span class="inline-flex items-center justify-center font-bold px-3 py-1 rounded-full min-w-[3rem] ${classNoRealizadas}">
+                                    ${counts.noRealizadas}
+                                </span>
+                            </td>
+                            <td class="px-6 py-3 text-center font-bold text-slate-800">
+                                ${total}
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
+
+            tableBody.innerHTML = htmlContent;
+            
+            // Ocultar dropzone, mostrar resultados
+            dropzoneContainer.classList.add('hidden');
+            resultsContainer.classList.remove('hidden');
+        }
+
+        // Abrir selector de archivos al hacer clic
+        dropzone.addEventListener('click', () => fileInput.click());
+
+        // Eventos de arrastrar y soltar (Drag & Drop)
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-blue-500', 'bg-blue-50');
+            dropzoneIconBg.classList.add('bg-blue-100', 'text-blue-600');
+            dropzoneIconBg.classList.remove('bg-slate-100', 'text-slate-500');
+        });
+
+        dropzone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-blue-500', 'bg-blue-50');
+            dropzoneIconBg.classList.remove('bg-blue-100', 'text-blue-600');
+            dropzoneIconBg.classList.add('bg-slate-100', 'text-slate-500');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-blue-500', 'bg-blue-50');
+            dropzoneIconBg.classList.remove('bg-blue-100', 'text-blue-600');
+            dropzoneIconBg.classList.add('bg-slate-100', 'text-slate-500');
+            
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                processFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // Evento al seleccionar archivo manual
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                processFile(e.target.files[0]);
+            }
+        });
+
+        // Botón "Analizar otro archivo"
+        resetBtn.addEventListener('click', () => {
+            fileInput.value = ''; // Limpiar input
+            hideError();
+            resultsContainer.classList.add('hidden');
+            dropzoneContainer.classList.remove('hidden');
+            tableBody.innerHTML = '';
+        });
+
+        // Botón "Descargar HTML"
+        downloadBtn.addEventListener('click', () => {
+            // Obtenemos el HTML actual de toda la página
+            const htmlContent = document.documentElement.outerHTML;
+            
+            // Creamos un Blob con el contenido
+            const blob = new Blob([htmlContent], { type: 'text/html' });
+            
+            // Creamos una URL para el Blob
+            const url = URL.createObjectURL(blob);
+            
+            // Creamos un enlace temporal para forzar la descarga
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'analizador_tareas.html'; // Nombre del archivo a descargar
+            document.body.appendChild(a);
+            a.click();
+            
+            // Limpiamos
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+
+    </script>
+</body>
+</html>
