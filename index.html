@@ -11,7 +11,7 @@
     <!-- Carga de SheetJS para leer archivos Excel en el navegador -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <!-- Pequeñas animaciones personalizadas -->
+    <!-- Pequeñas animaciones y estilos personalizados -->
     <style>
         @keyframes fadeInUp {
             from { opacity: 0; transform: translateY(10px); }
@@ -24,7 +24,7 @@
 </head>
 <body class="min-h-screen bg-slate-50 p-6 font-sans text-slate-800">
 
-    <div class="max-w-4xl mx-auto space-y-6">
+    <div class="max-w-5xl mx-auto space-y-6">
         
         <!-- Header -->
         <header class="bg-white shadow-sm rounded-2xl p-6 border border-slate-100">
@@ -38,7 +38,7 @@
                 </svg>
                 <div>
                     <h1 class="text-2xl font-bold text-slate-900">Analizador de Tareas - Procesos Excel</h1>
-                    <p class="text-sm text-slate-500">Analiza el estado de las tareas por establecimiento y área de trabajo.</p>
+                    <p class="text-sm text-slate-500">Analiza el estado, cumplimiento, rendimiento de empleados y detalle temporal de tareas pendientes.</p>
                 </div>
             </div>
         </header>
@@ -58,8 +58,8 @@
                         <p class="text-lg font-medium" id="dropzone-text">Haz clic para subir un Excel o arrástralo aquí</p>
                         <p class="text-sm text-slate-500 mt-2 max-w-md mx-auto">
                             El Excel debe tener 2 pestañas:<br/> 
-                            <strong>1ª:</strong> Procesos No Finalizados | <strong>2ª:</strong> Procesos Finalizados.<br/>
-                            La columna <strong>C</strong> debe contener el nombre del proceso.
+                            <strong>1ª:</strong> Procesos Finalizados | <strong>2ª:</strong> Procesos No Finalizados.<br/>
+                            Columna <strong>C</strong> (Proceso), Columna <strong>F/G</strong> (Fechas), Columna <strong>N</strong> (Estado) y Columna <strong>O</strong> (Empleado).
                         </p>
                     </div>
                 </div>
@@ -76,13 +76,20 @@
 
         <!-- Resultados (Oculto por defecto) -->
         <div id="results-container" class="hidden space-y-6 animate-fade-in-up">
-            <div class="flex justify-between items-center">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <span class="text-sm text-slate-500">Archivo analizado:</span>
                     <p id="file-name" class="font-semibold text-slate-900"></p>
+                    <p class="text-xs text-blue-600 mt-1 font-medium">💡 Haz clic en cualquier área de trabajo para ver el desglose de empleados (tareas realizadas) y detalle temporal de pendientes.</p>
                 </div>
                 <!-- Botones de Acción -->
                 <div class="flex space-x-3">
+                    <button id="view-toggle-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition-colors text-sm flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Ver Calendario de Pendientes
+                    </button>
                     <button id="download-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg shadow-sm transition-colors text-sm flex items-center">
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -95,15 +102,17 @@
                 </div>
             </div>
 
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <!-- Vista de Tabla de Resultados -->
+            <div id="table-view-container" class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 text-slate-600 text-sm border-b border-slate-200">
-                                <th class="px-6 py-4 font-semibold w-1/4">Área de Trabajo</th>
-                                <th class="px-6 py-4 font-semibold text-center">Tareas Realizadas</th>
-                                <th class="px-6 py-4 font-semibold text-center">Tareas No Realizadas</th>
-                                <th class="px-6 py-4 font-semibold text-center">Total Tareas</th>
+                                <th class="px-6 py-4 font-semibold w-1/4">Área de Trabajo <span class="text-xs font-normal text-slate-400 block">(Haz clic para ver detalles)</span></th>
+                                <th class="px-4 py-4 font-semibold text-center">Realizadas</th>
+                                <th class="px-4 py-4 font-semibold text-center">No Realizadas</th>
+                                <th class="px-4 py-4 font-semibold text-center">Total Tareas</th>
+                                <th class="px-6 py-4 font-semibold text-center">% Realizadas</th>
                             </tr>
                         </thead>
                         <tbody id="table-body" class="text-sm">
@@ -112,33 +121,129 @@
                     </table>
                 </div>
             </div>
+
+            <!-- Vista de Calendario de Pendientes (Oculto por defecto) -->
+            <div id="calendar-view-container" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-6 space-y-6">
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4 border-b border-slate-200 pb-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-slate-900">Calendario de Tareas Pendientes por Establecimiento y Área</h2>
+                        <p class="text-xs text-slate-500">Visualiza por fecha y establecimiento las tareas que no se han finalizado. Haz clic en cualquier día para ampliarlo.</p>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button id="prev-month" class="p-2 border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+                        <span id="calendar-month-title" class="font-bold text-slate-800 text-sm min-w-[140px] text-center">Mes Año</span>
+                        <button id="next-month" class="p-2 border border-slate-300 rounded-lg hover:bg-slate-50 text-slate-600">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Cabeceras Días de la Semana -->
+                <div class="grid grid-cols-7 gap-2 text-center font-bold text-xs text-slate-400 uppercase">
+                    <div>Lun</div><div>Mar</div><div>Mié</div><div>Jue</div><div>Vie</div><div>Sáb</div><div>Dom</div>
+                </div>
+
+                <!-- Cuadricula del Calendario -->
+                <div id="calendar-grid" class="grid grid-cols-7 gap-2">
+                    <!-- Dinámico -->
+                </div>
+            </div>
         </div>
 
     </div>
 
+    <!-- Modal para Día Ampliado -->
+    <div id="day-modal-container" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full overflow-hidden animate-fade-in-up">
+            <div class="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+                <div>
+                    <h3 id="day-modal-title" class="font-bold text-slate-900 text-lg">Fecha Seleccionada</h3>
+                    <p id="day-modal-subtitle" class="text-xs text-slate-500">Desglose detallado por Establecimiento y Área</p>
+                </div>
+                <button id="day-modal-close" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div id="day-modal-content" class="p-6 max-h-[65vh] overflow-y-auto space-y-6">
+                <!-- Dinámico desglose por establecimiento y área -->
+            </div>
+            <div class="bg-slate-50 px-6 py-3 border-t border-slate-200 text-right">
+                <button id="day-modal-close-btn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal para Desglose por Empleado y Tareas Pendientes con Fechas -->
+    <div id="modal-container" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl shadow-xl max-w-xl w-full overflow-hidden animate-fade-in-up">
+            <div class="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+                <div>
+                    <h3 id="modal-title" class="font-bold text-slate-900 text-lg">Desglose de Área</h3>
+                    <p id="modal-subtitle" class="text-xs text-slate-500"></p>
+                </div>
+                <button id="modal-close" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            <div class="p-6 max-h-[65vh] overflow-y-auto space-y-6">
+                <div>
+                    <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Rendimiento por Empleado (Tareas Realizadas)</h4>
+                    <div id="modal-employees-content" class="space-y-3">
+                        <!-- Dinámico empleados -->
+                    </div>
+                </div>
+                
+                <div class="pt-4 border-t border-slate-200">
+                    <h4 class="text-xs font-bold text-red-500 uppercase tracking-wider mb-3">Detalle de Tareas No Realizadas / Sin Finalizar (Con Fecha y Hora)</h4>
+                    <p class="text-xs text-slate-400 mb-3">Haz clic en cualquier tarea pendiente para consultar su fecha y hora de inicio / fin.</p>
+                    <div id="modal-pendings-content" class="space-y-2">
+                        <!-- Dinámico pendientes -->
+                    </div>
+                </div>
+            </div>
+            <div class="bg-slate-50 px-6 py-3 border-t border-slate-200 text-right">
+                <button id="modal-close-btn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium px-4 py-2 rounded-lg text-sm transition-colors">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Función para generar la estructura de datos limpia en cada análisis
+        let globalResultsData = null;
+
         function getInitialResults() {
             return {
                 "PECORA NERA RIVAS": {
-                    "PIZZERIA": { realizadas: 0, noRealizadas: 0 },
-                    "SALA": { realizadas: 0, noRealizadas: 0 },
-                    "OFFICE": { realizadas: 0, noRealizadas: 0 },
+                    "PIZZERIA": { realizadas: 0, noRealizadas: 0, empleados: {}, listaPendientes: [] },
+                    "SALA": { realizadas: 0, noRealizadas: 0, empleados: {}, listaPendientes: [] },
+                    "OFFICE": { realizadas: 0, noRealizadas: 0, empleados: {}, listaPendientes: [] },
                 },
                 "PECORA NERA CAÑAVERAL": {
-                    "PIZZERIA": { realizadas: 0, noRealizadas: 0 },
-                    "SALA": { realizadas: 0, noRealizadas: 0 },
-                    "OFFICE": { realizadas: 0, noRealizadas: 0 },
+                    "PIZZERIA": { realizadas: 0, noRealizadas: 0, empleados: {}, listaPendientes: [] },
+                    "SALA": { realizadas: 0, noRealizadas: 0, empleados: {}, listaPendientes: [] },
+                    "OFFICE": { realizadas: 0, noRealizadas: 0, empleados: {}, listaPendientes: [] },
                 },
                 "RAGU": {
-                    "COCINA": { realizadas: 0, noRealizadas: 0 },
-                    "SALA": { realizadas: 0, noRealizadas: 0 },
-                    "OFFICE": { realizadas: 0, noRealizadas: 0 },
+                    "COCINA": { realizadas: 0, noRealizadas: 0, empleados: {}, listaPendientes: [] },
+                    "SALA": { realizadas: 0, noRealizadas: 0, empleados: {}, listaPendientes: [] },
+                    "OFFICE": { realizadas: 0, noRealizadas: 0, empleados: {}, listaPendientes: [] },
                 }
             };
         }
 
-        // Elementos del DOM
         const dropzoneContainer = document.getElementById('dropzone-container');
         const dropzone = document.getElementById('dropzone');
         const dropzoneIconBg = document.getElementById('dropzone-icon-bg');
@@ -150,27 +255,77 @@
         const tableBody = document.getElementById('table-body');
         const resetBtn = document.getElementById('reset-btn');
         const downloadBtn = document.getElementById('download-btn');
+        
+        const viewToggleBtn = document.getElementById('view-toggle-btn');
+        const tableViewContainer = document.getElementById('table-view-container');
+        const calendarViewContainer = document.getElementById('calendar-view-container');
+        const calendarGrid = document.getElementById('calendar-grid');
+        const calendarMonthTitle = document.getElementById('calendar-month-title');
+        const prevMonthBtn = document.getElementById('prev-month');
+        const nextMonthBtn = document.getElementById('next-month');
+
+        const dayModalContainer = document.getElementById('day-modal-container');
+        const dayModalTitle = document.getElementById('day-modal-title');
+        const dayModalContent = document.getElementById('day-modal-content');
+        const dayModalClose = document.getElementById('day-modal-close');
+        const dayModalCloseBtn = document.getElementById('day-modal-close-btn');
+
+        let currentCalendarDate = new Date();
+        let isCalendarView = false;
+        let globalPendingByDate = {};
+        
+        const modalContainer = document.getElementById('modal-container');
+        const modalTitle = document.getElementById('modal-title');
+        const modalSubtitle = document.getElementById('modal-subtitle');
+        const modalEmployeesContent = document.getElementById('modal-employees-content');
+        const modalPendingsContent = document.getElementById('modal-pendings-content');
+        const modalClose = document.getElementById('modal-close');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
 
         function identifyTask(proceso) {
             if (!proceso || typeof proceso !== 'string') return null;
             const proc = proceso.toUpperCase().trim();
 
-            // PECORA NERA RIVAS
             if (proc.startsWith("PIZZERIA PECORA RIVAS")) return { est: "PECORA NERA RIVAS", area: "PIZZERIA" };
             if (proc.startsWith("SALA PECORA RIVAS")) return { est: "PECORA NERA RIVAS", area: "SALA" };
             if (proc.startsWith("OFFICE PECORA RIVAS")) return { est: "PECORA NERA RIVAS", area: "OFFICE" };
 
-            // PECORA NERA CAÑAVERAL
             if (proc.startsWith("PIZZERIA PECORA CAÑAVERAL")) return { est: "PECORA NERA CAÑAVERAL", area: "PIZZERIA" };
             if (proc.startsWith("SALA PECORA CAÑAVERAL")) return { est: "PECORA NERA CAÑAVERAL", area: "SALA" };
             if (proc.startsWith("OFFICE PECORA CAÑAVERAL")) return { est: "PECORA NERA CAÑAVERAL", area: "OFFICE" };
 
-            // RAGU
             if (proc.startsWith("COCINA RAGU")) return { est: "RAGU", area: "COCINA" };
             if (proc.startsWith("SALA RAGU")) return { est: "RAGU", area: "SALA" };
             if (proc.startsWith("OFFICE RAGU")) return { est: "RAGU", area: "OFFICE" };
 
             return null;
+        }
+
+        function formatExcelDate(serialOrString) {
+            if (!serialOrString) return "No especificada";
+            if (typeof serialOrString === 'string') return serialOrString;
+            
+            // Si Excel lo interpreta como número serial de fecha
+            if (typeof serialOrString === 'number') {
+                const utc_days = Math.floor(serialOrString - 25569);
+                const utc_value = utc_days * 86400;
+                const date_info = new Date(utc_value * 1000);
+                
+                const day = String(date_info.getUTCDate()).padStart(2, '0');
+                const month = String(date_info.getUTCMonth() + 1).padStart(2, '0');
+                const year = date_info.getUTCFullYear();
+                
+                // Fracción de día para la hora
+                const fractional_day = serialOrString - Math.floor(serialOrString);
+                if (fractional_day > 0) {
+                    const total_seconds = Math.floor(fractional_day * 86400);
+                    const hours = String(Math.floor(total_seconds / 3600)).padStart(2, '0');
+                    const minutes = String(Math.floor((total_seconds % 3600) / 60)).padStart(2, '0');
+                    return `${year}-${month}-${day} ${hours}:${minutes}`;
+                }
+                return `${year}-${month}-${day}`;
+            }
+            return String(serialOrString);
         }
 
         function showError(msg) {
@@ -187,7 +342,6 @@
         function processFile(file) {
             if (!file) return;
             
-            // Si SheetJS no se ha cargado correctamente
             if (typeof XLSX === 'undefined') {
                 showError("La librería para leer Excel no ha cargado. Verifica tu conexión a internet.");
                 return;
@@ -208,41 +362,75 @@
                         return;
                     }
 
-                    // Pestaña 1 (Índice 0) -> No Finalizados, Pestaña 2 (Índice 1) -> Finalizados
-                    const sheetNoFinalizados = wb.SheetNames[0];
-                    const sheetFinalizados = wb.SheetNames[1];
+                    // Pestaña 1 (Índice 0) -> Finalizados, Pestaña 2 (Índice 1) -> No Finalizados
+                    const sheetFinalizados = wb.SheetNames[0];
+                    const sheetNoFinalizados = wb.SheetNames[1];
 
                     const results = getInitialResults();
 
-                    function analyzeSheet(sheetName, isFinalizado) {
-                        const ws = wb.Sheets[sheetName];
-                        // header: 1 devuelve array de arrays
-                        const rows = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                    // 1. Procesar Pestaña Finalizados (Todas se consideran realizadas)
+                    const wsFin = wb.Sheets[sheetFinalizados];
+                    const rowsFin = XLSX.utils.sheet_to_json(wsFin, { header: 1 });
+                    for (let i = 1; i < rowsFin.length; i++) {
+                        const row = rowsFin[i];
+                        if (!row || row.length === 0) continue;
 
-                        // Empezamos en i = 1 para saltar la fila de cabeceras
-                        for (let i = 1; i < rows.length; i++) {
-                            const row = rows[i];
-                            if (!row || row.length === 0) continue;
+                        const proceso = row[2]; // Columna C
+                        const empleadoRaw = row[14]; // Columna O
+                        const empleado = (empleadoRaw && typeof empleadoRaw === 'string') ? empleadoRaw.trim() : (empleadoRaw ? String(empleadoRaw).trim() : "Sin asignar");
 
-                            const proceso = row[2]; // Columna C es el índice 2
+                        const taskInfo = identifyTask(proceso);
+                        if (taskInfo) {
+                            const areaObj = results[taskInfo.est][taskInfo.area];
+                            areaObj.realizadas += 1;
 
-                            const taskInfo = identifyTask(proceso);
-                            if (taskInfo) {
-                                if (isFinalizado) {
-                                    results[taskInfo.est][taskInfo.area].realizadas += 1;
-                                } else {
-                                    results[taskInfo.est][taskInfo.area].noRealizadas += 1;
+                            if (!areaObj.empleados[empleado]) {
+                                areaObj.empleados[empleado] = { realizadas: 0 };
+                            }
+                            areaObj.empleados[empleado].realizadas += 1;
+                        }
+                    }
+
+                    // 2. Procesar Pestaña No Finalizados (Revisando Columna N - Estado de la tarea)
+                    const wsNoFin = wb.Sheets[sheetNoFinalizados];
+                    const rowsNoFin = XLSX.utils.sheet_to_json(wsNoFin, { header: 1 });
+                    for (let i = 1; i < rowsNoFin.length; i++) {
+                        const row = rowsNoFin[i];
+                        if (!row || row.length === 0) continue;
+
+                        const proceso = row[2]; // Columna C
+                        const fechaInicioRaw = row[5]; // Columna F (índice 5)
+                        const fechaFinRaw = row[6]; // Columna G (índice 6)
+                        const estadoTareaRaw = row[13]; // Columna N (índice 13)
+                        const estadoTarea = (estadoTareaRaw && typeof estadoTareaRaw === 'string') ? estadoTareaRaw.trim().toLowerCase() : "";
+                        
+                        const empleadoRaw = row[14]; // Columna O
+                        const empleado = (empleadoRaw && typeof empleadoRaw === 'string') ? empleadoRaw.trim() : (empleadoRaw ? String(empleadoRaw).trim() : "Sin asignar");
+
+                        const taskInfo = identifyTask(proceso);
+                        if (taskInfo) {
+                            const areaObj = results[taskInfo.est][taskInfo.area];
+
+                            if (estadoTarea.includes("finalizada") && !estadoTarea.includes("sin")) {
+                                areaObj.realizadas += 1;
+                                if (!areaObj.empleados[empleado]) {
+                                    areaObj.empleados[empleado] = { realizadas: 0 };
                                 }
+                                areaObj.empleados[empleado].realizadas += 1;
+                            } else {
+                                areaObj.noRealizadas += 1;
+                                areaObj.listaPendientes.push({
+                                    proceso: proceso || "Proceso sin nombre",
+                                    fechaInicio: formatExcelDate(fechaInicioRaw),
+                                    fechaFin: formatExcelDate(fechaFinRaw)
+                                });
                             }
                         }
                     }
 
-                    // Ejecutar análisis en ambas pestañas
-                    analyzeSheet(sheetNoFinalizados, false);
-                    analyzeSheet(sheetFinalizados, true);
-
-                    // Renderizar en la interfaz
+                    globalResultsData = results;
                     renderResults(results);
+                    renderCalendar();
 
                 } catch (err) {
                     console.error(err);
@@ -257,38 +445,51 @@
             let htmlContent = '';
 
             for (const [est, areas] of Object.entries(results)) {
-                // Cabecera del Establecimiento
                 htmlContent += `
                     <tr class="bg-slate-100 border-b border-slate-200">
-                        <td colspan="4" class="px-6 py-3 font-bold text-slate-800 tracking-wide uppercase text-xs">
+                        <td colspan="5" class="px-6 py-3 font-bold text-slate-800 tracking-wide uppercase text-xs">
                             Establecimiento: <span class="text-blue-700">${est}</span>
                         </td>
                     </tr>
                 `;
 
-                // Filas por cada Área
                 for (const [area, counts] of Object.entries(areas)) {
                     const total = counts.realizadas + counts.noRealizadas;
+                    const porcentaje = total > 0 ? ((counts.realizadas / total) * 100).toFixed(1) : 0;
                     const classNoRealizadas = counts.noRealizadas > 0 ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500';
 
+                    let badgeColor = 'bg-emerald-100 text-emerald-800';
+                    if (porcentaje < 50) badgeColor = 'bg-red-100 text-red-800';
+                    else if (porcentaje < 80) badgeColor = 'bg-amber-100 text-amber-800';
+
                     htmlContent += `
-                        <tr class="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
-                            <td class="px-6 py-3 font-medium text-slate-700 pl-10 flex items-center">
-                                <div class="w-2 h-2 rounded-full bg-slate-300 mr-3"></div>
-                                ${area}
+                        <tr class="border-b border-slate-100 hover:bg-blue-50/65 transition-colors cursor-pointer group" onclick="openAreaModal('${est}', '${area}')" title="Haz clic para ver detalles">
+                            <td class="px-6 py-3 font-medium text-slate-700 pl-10 flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="w-2 h-2 rounded-full bg-blue-500 mr-3"></div>
+                                    <span class="group-hover:text-blue-600 group-hover:underline">${area}</span>
+                                </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-slate-400 group-hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                </svg>
                             </td>
-                            <td class="px-6 py-3 text-center">
+                            <td class="px-4 py-3 text-center">
                                 <span class="inline-flex items-center justify-center bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full min-w-[3rem]">
                                     ${counts.realizadas}
                                 </span>
                             </td>
-                            <td class="px-6 py-3 text-center">
+                            <td class="px-4 py-3 text-center">
                                 <span class="inline-flex items-center justify-center font-bold px-3 py-1 rounded-full min-w-[3rem] ${classNoRealizadas}">
                                     ${counts.noRealizadas}
                                 </span>
                             </td>
-                            <td class="px-6 py-3 text-center font-bold text-slate-800">
+                            <td class="px-4 py-3 text-center font-bold text-slate-800">
                                 ${total}
+                            </td>
+                            <td class="px-6 py-3 text-center">
+                                <span class="inline-flex items-center justify-center font-bold px-3 py-1 rounded-full min-w-[4rem] ${badgeColor}">
+                                    ${porcentaje}%
+                                </span>
                             </td>
                         </tr>
                     `;
@@ -296,16 +497,317 @@
             }
 
             tableBody.innerHTML = htmlContent;
-            
-            // Ocultar dropzone, mostrar resultados
             dropzoneContainer.classList.add('hidden');
             resultsContainer.classList.remove('hidden');
         }
 
-        // Abrir selector de archivos al hacer clic
+        function renderCalendar() {
+            if (!globalResultsData) return;
+
+            // Recopilar todas las tareas pendientes con su fecha YYYY-MM-DD
+            const pendingByDate = {};
+
+            for (const [est, areas] of Object.entries(globalResultsData)) {
+                for (const [area, data] of Object.entries(areas)) {
+                    data.listaPendientes.forEach(p => {
+                        if (p.fechaInicio && p.fechaInicio !== "No especificada") {
+                            const datePart = p.fechaInicio.split(' ')[0];
+                            if (!pendingByDate[datePart]) {
+                                pendingByDate[datePart] = [];
+                            }
+                            pendingByDate[datePart].push({
+                                establecimiento: est,
+                                area: area,
+                                proceso: p.proceso,
+                                fechaInicio: p.fechaInicio,
+                                fechaFin: p.fechaFin
+                            });
+                        }
+                    });
+                }
+            }
+            globalPendingByDate = pendingByDate;
+
+            const year = currentCalendarDate.getFullYear();
+            const month = currentCalendarDate.getMonth();
+
+            const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+            calendarMonthTitle.textContent = `${monthNames[month]} ${year}`;
+
+            const firstDayIndex = new Date(year, month, 1).getDay();
+            const adjustedFirstDay = (firstDayIndex === 0) ? 6 : firstDayIndex - 1;
+            const totalDays = new Date(year, month + 1, 0).getDate();
+
+            let calendarHtml = '';
+
+            for (let i = 0; i < adjustedFirstDay; i++) {
+                calendarHtml += `<div class="bg-slate-50/50 border border-slate-100 rounded-xl min-h-[110px] p-2 opacity-40"></div>`;
+            }
+
+            for (let day = 1; day <= totalDays; day++) {
+                const monthStr = String(month + 1).padStart(2, '0');
+                const dayStr = String(day).padStart(2, '0');
+                const dateKey = `${year}-${monthStr}-${dayStr}`;
+
+                const dayTasks = pendingByDate[dateKey] || [];
+                const hasTasks = dayTasks.length > 0;
+
+                // Agrupar tareas del día por Establecimiento para mostrar resumen rápido en miniatura
+                const estSummary = {};
+                dayTasks.forEach(t => {
+                    if (!estSummary[t.establecimiento]) estSummary[t.establecimiento] = 0;
+                    estSummary[t.establecimiento]++;
+                });
+
+                calendarHtml += `
+                    <div class="border border-slate-200 rounded-xl min-h-[120px] p-2 bg-white flex flex-col justify-between cursor-pointer hover:border-blue-400 hover:shadow-sm transition-all ${hasTasks ? 'border-red-200 bg-red-50/20' : ''}" onclick="openDayModal('${dateKey}')">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-xs ${hasTasks ? 'text-red-700 bg-red-100 px-1.5 py-0.5 rounded-md' : 'text-slate-500'}">${day}</span>
+                            ${hasTasks ? `<span class="text-[10px] font-bold text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full">${dayTasks.length} pend.</span>` : ''}
+                        </div>
+                        <div class="space-y-1 mt-1">
+                `;
+
+                for (const [estName, count] of Object.entries(estSummary)) {
+                    calendarHtml += `
+                        <div class="bg-white border border-red-200 rounded-md p-1 text-[10px] shadow-sm flex justify-between items-center">
+                            <span class="font-bold text-red-900 truncate pr-1">${estName}</span>
+                            <span class="bg-red-100 text-red-700 font-bold px-1 rounded">${count}</span>
+                        </div>
+                    `;
+                }
+
+                calendarHtml += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            calendarGrid.innerHTML = calendarHtml;
+        }
+
+        window.openDayModal = function(dateKey) {
+            const dayTasks = globalPendingByDate[dateKey] || [];
+            dayModalTitle.textContent = `Tareas Pendientes — ${dateKey}`;
+
+            if (dayTasks.length === 0) {
+                dayModalContent.innerHTML = `
+                    <div class="text-center py-8">
+                        <p class="text-slate-500 text-sm">🎉 No hay tareas pendientes registradas para esta fecha.</p>
+                    </div>
+                `;
+            } else {
+                // Agrupar por Establecimiento y luego por Área
+                const grouped = {};
+                dayTasks.forEach(t => {
+                    if (!grouped[t.establecimiento]) grouped[t.establecimiento] = {};
+                    if (!grouped[t.establecimiento][t.area]) grouped[t.establecimiento][t.area] = [];
+                    grouped[t.establecimiento][t.area].push(t);
+                });
+
+                let html = '';
+                for (const [est, areas] of Object.entries(grouped)) {
+                    html += `
+                        <div class="space-y-3 bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                            <h4 class="font-bold text-blue-700 text-sm uppercase tracking-wide border-b border-slate-200 pb-2">${est}</h4>
+                            <div class="space-y-3 pl-2">
+                    `;
+                    for (const [area, tasks] of Object.entries(areas)) {
+                        html += `
+                            <div class="bg-white border border-slate-200 rounded-xl p-3 space-y-2 shadow-sm">
+                                <div class="flex justify-between items-center">
+                                    <span class="font-bold text-slate-800 text-xs bg-slate-100 px-2 py-0.5 rounded">${area}</span>
+                                    <span class="text-xs font-semibold text-red-600">${tasks.length} tarea(s) pendiente(s)</span>
+                                </div>
+                                <div class="space-y-1.5 pt-1">
+                        `;
+                        tasks.forEach(t => {
+                            html += `
+                                <div class="bg-red-50/70 border border-red-200 rounded-lg p-2 text-xs space-y-1">
+                                    <p class="font-bold text-red-900">${t.proceso}</p>
+                                    <div class="flex justify-between text-[11px] text-slate-600 pt-1 border-t border-red-100">
+                                        <span>📅 Inicio: <strong class="text-slate-900">${t.fechaInicio}</strong></span>
+                                        <span>🏁 Fin: <strong class="text-slate-900">${t.fechaFin}</strong></span>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        html += `
+                                </div>
+                            </div>
+                        `;
+                    }
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                }
+                dayModalContent.innerHTML = html;
+            }
+
+            dayModalContainer.classList.remove('hidden');
+            dayModalContainer.classList.add('flex');
+        };
+
+        function closeDayModal() {
+            dayModalContainer.classList.add('hidden');
+            dayModalContainer.classList.remove('flex');
+        }
+
+        dayModalClose.addEventListener('click', closeDayModal);
+        dayModalCloseBtn.addEventListener('click', closeDayModal);
+        dayModalContainer.addEventListener('click', (e) => {
+            if (e.target === dayModalContainer) closeDayModal();
+        });
+
+        window.showTaskModalDetail = function(est, area, proceso, fechaInicio, fechaFin) {
+            modalTitle.textContent = `Detalle de Tarea Pendiente`;
+            modalSubtitle.textContent = `${est} — ${area}`;
+
+            modalEmployeesContent.innerHTML = `
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                    <p class="text-xs text-slate-400 font-bold uppercase mb-1">Nombre del Proceso</p>
+                    <p class="text-sm font-semibold text-slate-900">${proceso}</p>
+                </div>
+            `;
+
+            modalPendingsContent.innerHTML = `
+                <div class="bg-red-50 border border-red-200 rounded-xl p-3 space-y-1">
+                    <p><strong>📅 Fecha de inicio:</strong> <span class="text-slate-900">${fechaInicio}</span></p>
+                    <p><strong>🏁 Fecha de fin:</strong> <span class="text-slate-900">${fechaFin}</span></p>
+                </div>
+            `;
+
+            modalContainer.classList.remove('hidden');
+            modalContainer.classList.add('flex');
+        };
+
+        viewToggleBtn.addEventListener('click', () => {
+            isCalendarView = !isCalendarView;
+            if (isCalendarView) {
+                tableViewContainer.classList.add('hidden');
+                calendarViewContainer.classList.remove('hidden');
+                viewToggleBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Ver Tabla Resumen
+                `;
+                renderCalendar();
+            } else {
+                calendarViewContainer.classList.add('hidden');
+                tableViewContainer.classList.remove('hidden');
+                viewToggleBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    Ver Calendario de Pendientes
+                `;
+            }
+        });
+
+        prevMonthBtn.addEventListener('click', () => {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() - 1);
+            renderCalendar();
+        });
+
+        nextMonthBtn.addEventListener('click', () => {
+            currentCalendarDate.setMonth(currentCalendarDate.getMonth() + 1);
+            renderCalendar();
+        });
+
+        window.openAreaModal = function(est, area) {
+            if (!globalResultsData) return;
+            const areaData = globalResultsData[est][area];
+            const empleados = areaData.empleados;
+            const pendientes = areaData.listaPendientes;
+
+            modalTitle.textContent = `${area} - ${est}`;
+            modalSubtitle.textContent = `Desglose de tareas realizadas por empleados y tareas sin finalizar con fecha y hora`;
+
+            const totalAreaRealizadas = areaData.realizadas;
+
+            // 1. Renderizar Empleados
+            let empHtml = '';
+            const empEntries = Object.entries(empleados);
+
+            if (empEntries.length === 0) {
+                empHtml = `<p class="text-sm text-slate-500 italic">No hay tareas realizadas registradas por empleados en esta área.</p>`;
+            } else {
+                empEntries.sort((a, b) => b[1].realizadas - a[1].realizadas);
+                for (const [nombre, stats] of empEntries) {
+                    const porcentajeSobreArea = totalAreaRealizadas > 0 ? ((stats.realizadas / totalAreaRealizadas) * 100).toFixed(1) : 0;
+
+                    empHtml += `
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 flex justify-between items-center">
+                            <div>
+                                <span class="font-semibold text-slate-900 block text-sm">${nombre}</span>
+                                <span class="text-xs text-slate-500">Aportación: <strong class="text-blue-600">${porcentajeSobreArea}%</strong> del total del área</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="bg-green-100 text-green-700 font-bold px-3 py-1 rounded-full text-xs">
+                                    ${stats.realizadas} realizadas
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                }
+            }
+            modalEmployeesContent.innerHTML = empHtml;
+
+            // 2. Renderizar Tareas Pendientes con acordeón interactivo de fechas
+            let pendHtml = '';
+            if (pendientes.length === 0) {
+                pendHtml = `<p class="text-sm text-emerald-600 font-medium">🎉 ¡Excelente! No hay tareas pendientes en esta área.</p>`;
+            } else {
+                pendHtml = `<div class="space-y-2">`;
+                pendientes.forEach((p, index) => {
+                    pendHtml += `
+                        <div class="bg-red-50/60 border border-red-200 rounded-xl p-3 transition-all">
+                            <button onclick="togglePendingDetail(${index})" class="w-full flex justify-between items-center text-left focus:outline-none">
+                                <span class="font-medium text-xs text-red-900 pr-2">${p.proceso}</span>
+                                <span class="text-xs text-red-600 font-bold underline flex-shrink-0 flex items-center">
+                                    Ver Fecha/Hora
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </span>
+                            </button>
+                            <div id="pending-detail-${index}" class="hidden mt-2 pt-2 border-t border-red-200 text-xs text-slate-700 space-y-1 bg-white p-2 rounded-lg">
+                                <p><strong>📅 Fecha de inicio:</strong> <span class="text-slate-900">${p.fechaInicio}</span></p>
+                                <p><strong>🏁 Fecha de fin:</strong> <span class="text-slate-900">${p.fechaFin}</span></p>
+                            </div>
+                        </div>
+                    `;
+                });
+                pendHtml += `</div>`;
+            }
+            modalPendingsContent.innerHTML = pendHtml;
+
+            modalContainer.classList.remove('hidden');
+            modalContainer.classList.add('flex');
+        }
+
+        window.togglePendingDetail = function(index) {
+            const detailElem = document.getElementById(`pending-detail-${index}`);
+            if (detailElem) {
+                detailElem.classList.toggle('hidden');
+            }
+        }
+
+        function closeModal() {
+            modalContainer.classList.add('hidden');
+            modalContainer.classList.remove('flex');
+        }
+
+        modalClose.addEventListener('click', closeModal);
+        modalCloseBtn.addEventListener('click', closeModal);
+        modalContainer.addEventListener('click', (e) => {
+            if (e.target === modalContainer) closeModal();
+        });
+
         dropzone.addEventListener('click', () => fileInput.click());
 
-        // Eventos de arrastrar y soltar (Drag & Drop)
         dropzone.addEventListener('dragover', (e) => {
             e.preventDefault();
             dropzone.classList.add('border-blue-500', 'bg-blue-50');
@@ -331,45 +833,36 @@
             }
         });
 
-        // Evento al seleccionar archivo manual
         fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length > 0) {
                 processFile(e.target.files[0]);
             }
         });
 
-        // Botón "Analizar otro archivo"
         resetBtn.addEventListener('click', () => {
-            fileInput.value = ''; // Limpiar input
+            fileInput.value = '';
             hideError();
             resultsContainer.classList.add('hidden');
             dropzoneContainer.classList.remove('hidden');
             tableBody.innerHTML = '';
+            globalResultsData = null;
+            if (isCalendarView) {
+                viewToggleBtn.click();
+            }
         });
 
-        // Botón "Descargar HTML"
         downloadBtn.addEventListener('click', () => {
-            // Obtenemos el HTML actual de toda la página
             const htmlContent = document.documentElement.outerHTML;
-            
-            // Creamos un Blob con el contenido
             const blob = new Blob([htmlContent], { type: 'text/html' });
-            
-            // Creamos una URL para el Blob
             const url = URL.createObjectURL(blob);
-            
-            // Creamos un enlace temporal para forzar la descarga
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'analizador_tareas.html'; // Nombre del archivo a descargar
+            a.download = 'analizador_tareas_detalle.html';
             document.body.appendChild(a);
             a.click();
-            
-            // Limpiamos
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         });
-
     </script>
 </body>
 </html>
